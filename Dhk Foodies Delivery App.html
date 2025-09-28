@@ -296,9 +296,9 @@
                                         <div className="space-y-2">
                                             {availableCategories.map(category => (
                                                  <label key={category} className="flex items-center justify-between cursor-pointer">
-                                                    <span className="text-gray-800 capitalize">{category}</span>
-                                                    <input type="checkbox" checked={selectedFilters.categories.includes(category)} onChange={() => handleCategoryChange(category)} className="h-5 w-5 rounded text-orange-600 focus:ring-orange-500 border-gray-300"/>
-                                                </label>
+                                                     <span className="text-gray-800 capitalize">{category}</span>
+                                                     <input type="checkbox" checked={selectedFilters.categories.includes(category)} onChange={() => handleCategoryChange(category)} className="h-5 w-5 rounded text-orange-600 focus:ring-orange-500 border-gray-300"/>
+                                                 </label>
                                             ))}
                                         </div>
                                     </div>
@@ -306,8 +306,8 @@
                             </div>
                             <div className="p-4 bg-white border-t flex-shrink-0">
                                  <button onClick={handleApply} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-full transition-colors">
-                                    APPLY FILTER
-                                </button>
+                                     APPLY FILTER
+                                 </button>
                             </div>
                         </div>
                     </div>
@@ -315,21 +315,58 @@
             );
         };
 
+        // Component to display discount upsell suggestions
+        const DiscountUpsellSuggestion = ({ calculateBill }) => {
+            const { subtotal } = calculateBill();
+            let message = null;
+
+            const slabs = [
+                { threshold: 500, percent: 5 },
+                { threshold: 1000, percent: 10 },
+                { threshold: 2000, percent: 15 },
+                { threshold: 3000, percent: 20 },
+                { threshold: 5000, percent: 25 }
+            ];
+
+            // Find the next slab the user can reach
+            const nextSlab = slabs.find(slab => subtotal < slab.threshold);
+            
+            if (nextSlab) {
+                const amountNeeded = nextSlab.threshold - subtotal;
+                if (amountNeeded <= 100 && amountNeeded > 0) { // Show if within 100 rupees
+                    message = `Add items worth ₹${amountNeeded.toFixed(2)} more to unlock a ${nextSlab.percent}% discount!`;
+                }
+            } else if (subtotal >= 5000) {
+                 message = `🎉 You've unlocked the maximum 25% discount!`;
+            }
+
+            if (!message) return null;
+
+            return (
+                <div className="mt-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-lg text-center">
+                    <p className="font-semibold">{message}</p>
+                </div>
+            );
+        };
+
 
         // RestaurantMenuPage Component
-        const RestaurantMenuPage = ({ restaurant, cart, onUpdateCartQuantity, onBackToRestaurants }) => {
+        const RestaurantMenuPage = ({ restaurant, cart, onUpdateCartQuantity, onBackToRestaurants, calculateBill }) => {
             const categorizedMenu = restaurant.menu.reduce((acc, item) => {
                 const category = item.category || 'Other';
                 if (!acc[category]) acc[category] = [];
                 acc[category].push(item);
                 return acc;
             }, {});
+            
+            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
             return (
                 <section className="container mx-auto py-8 md:py-12 px-4">
                     <button onClick={onBackToRestaurants} className="mb-6 flex items-center text-gray-700 hover:text-orange-500 transition-colors duration-200 font-medium"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M15 18l-6-6 6-6"/></svg>Back to Restaurants</button>
                     <h2 className="text-4xl md:text-5xl font-bold text-gray-800 text-center mb-4">{restaurant.name}</h2>
                     <p className="text-lg text-gray-600 text-center mb-8">{restaurant.cuisine} - {restaurant.address}</p>
+                    
                     {Object.keys(categorizedMenu).map((category) => (
                         <div key={category} className="mb-10">
                             <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 border-b-2 border-orange-400 pb-2">{category}</h3>
@@ -338,13 +375,14 @@
                             </div>
                         </div>
                     ))}
+                    {totalItems > 0 && <DiscountUpsellSuggestion calculateBill={calculateBill} />}
                 </section>
             );
         };
 
         // CartView Component
-        const CartView = ({ cartItems, onClose, onUpdateQuantity, onRemoveItem, onProceedToPayment }) => {
-            const calculateTotal = () => cartItems.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2);
+        const CartView = ({ cartItems, onClose, onUpdateQuantity, onRemoveItem, onProceedToPayment, calculateBill }) => {
+            const bill = calculateBill(cartItems);
 
             return (
                 <div className="modal-overlay">
@@ -367,9 +405,16 @@
                                         </div>
                                     </div>
                                 ))}
-                                <div className="text-right mt-6 pt-4 border-t border-gray-200">
-                                    <p className="text-xl font-bold text-gray-800">Total: ₹{calculateTotal()}</p>
-                                    <button onClick={() => onProceedToPayment(calculateTotal())} className="mt-4 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-md transition-colors duration-200" disabled={cartItems.length === 0}>Proceed to Checkout</button>
+                                <div className="text-right mt-6 pt-4 border-t border-gray-200 space-y-2">
+                                    <p className="text-lg font-semibold text-gray-700">Subtotal: ₹{bill.subtotal.toFixed(2)}</p>
+                                    {bill.discountAmount > 0 && 
+                                        <p className="text-lg font-semibold text-green-600">Tiered Discount ({bill.discountPercentage}%): - ₹{bill.discountAmount.toFixed(2)}</p>
+                                    }
+                                    {bill.fixedDiscount > 0 &&
+                                        <p className="text-lg font-semibold text-green-600">Loyalty Discount: - ₹{bill.fixedDiscount.toFixed(2)}</p>
+                                    }
+                                    <p className="text-xl font-bold text-gray-800">Total: ₹{bill.finalTotal.toFixed(2)}</p>
+                                    <button onClick={() => onProceedToPayment(bill.finalTotal)} className="mt-4 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-full text-lg font-semibold shadow-md transition-colors duration-200" disabled={cartItems.length === 0}>Proceed to Checkout</button>
                                 </div>
                             </div>
                         )}
@@ -539,23 +584,26 @@
             const [paymentProcessing, setPaymentProcessing] = useState(false);
             const [paymentMessage, setPaymentMessage] = useState('');
             const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '' });
-            const [upiNumber, setUpiNumber] = useState('');
+            
+            // --- UPDATED QR AND UPI LOGIC ---
+            const UPI_ID = '7702807424@kotak811';
+            const PAYEE_NAME = 'DHANNODI HEMANTH KUMAR';
+
+            // Static QR code for scanning (without amount)
+            const staticQrData = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(PAYEE_NAME)}&cu=INR`;
+            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(staticQrData)}`;
+
+            // Dynamic UPI link for direct payment buttons (with amount)
+            const upiPaymentLink = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(PAYEE_NAME)}&am=${totalAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent('Order from DHK FOODIES')}`;
 
             const handlePayNow = async () => {
-                // Validation before proceeding
                 if (selectedMethod === 'card') {
                     if (!cardDetails.number || !cardDetails.expiry || !cardDetails.cvv) {
                         setPaymentMessage('Please fill all card details.');
                         return;
                     }
                 }
-                if (selectedMethod === 'upi') {
-                    if (!upiNumber || !/^\d{10}$/.test(upiNumber)) {
-                        setPaymentMessage('Please enter a valid 10-digit UPI number.');
-                        return;
-                    }
-                }
-
+                
                 setPaymentProcessing(true);
                 setPaymentMessage('');
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -575,10 +623,9 @@
                     <div className="modal-content w-full md:w-2/3 lg:w-1/2">
                         <button onClick={onClose} className="modal-close-button"><X size={24} /></button>
                         <h2 className="text-3xl font-bold text-gray-800 mb-4 text-center">Complete Your Payment</h2>
-                        <p className="text-center text-xl font-semibold text-orange-600 mb-8">Total Amount: ₹{totalAmount}</p>
+                        <p className="text-center text-xl font-semibold text-orange-600 mb-8">Total Amount: ₹{Number(totalAmount).toFixed(2)}</p>
 
                         <div className="space-y-4">
-                            {/* Card Payment Option */}
                             <div className={`border rounded-lg p-4 transition-all ${selectedMethod === 'card' ? 'border-orange-500 ring-2 ring-orange-200' : 'border-gray-300'}`}>
                                 <label className="flex items-center cursor-pointer">
                                     <input type="radio" name="paymentMethod" value="card" checked={selectedMethod === 'card'} onChange={() => setSelectedMethod('card')} className="h-5 w-5 text-orange-600 focus:ring-orange-500" />
@@ -594,29 +641,37 @@
                                     </div>
                                 )}
                             </div>
-
-                            {/* UPI Payment Option */}
                             <div className={`border rounded-lg p-4 transition-all ${selectedMethod === 'upi' ? 'border-orange-500 ring-2 ring-orange-200' : 'border-gray-300'}`}>
                                 <label className="flex items-center cursor-pointer">
                                     <input type="radio" name="paymentMethod" value="upi" checked={selectedMethod === 'upi'} onChange={() => setSelectedMethod('upi')} className="h-5 w-5 text-orange-600 focus:ring-orange-500" />
-                                    <span className="ml-3 font-semibold text-lg text-gray-800">UPI</span>
+                                    <span className="ml-3 font-semibold text-lg text-gray-800">UPI / QR Code</span>
                                 </label>
                                 {selectedMethod === 'upi' && (
-                                    <div className="mt-4 pl-8">
-                                        <input type="tel" placeholder="Enter your 10-digit UPI Number" value={upiNumber} onChange={(e) => setUpiNumber(e.target.value)} maxLength="10" className="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700" />
+                                     <div className="mt-4 flex flex-col items-center space-y-4">
+                                        <p className="text-gray-700 font-medium">Scan with any UPI app or pay directly.</p>
+                                        <img src={qrCodeUrl} alt="UPI QR Code" className="w-48 h-48 rounded-lg shadow-md border bg-white" />
+                                        <a href={qrCodeUrl} download="DHK_FOODIES_UPI_QR.png" className="inline-block bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors duration-200">
+                                            Download QR Code
+                                        </a>
+                                        <div className="w-full border-t pt-4 text-center">
+                                            <p className="text-gray-600 text-sm mb-3">Pay with your favorite app:</p>
+                                            <div className="flex justify-center space-x-4">
+                                                <a href={upiPaymentLink} className="flex items-center justify-center bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"><img src="https://www.gstatic.com/images/icons/material/system/2x/google_pay_mark_48dp.png" className="w-6 h-6 mr-2" /> GPay</a>
+                                                <a href={upiPaymentLink} className="flex items-center justify-center bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"><img src="https://static-assets-web.flixcart.com/fk-p-linchpin-web/fk-cp-zion/img/phonepe-logo_d5-49271.svg" className="w-6 h-6 mr-2 bg-white rounded-full" /> PhonePe</a>
+                                                <a href={upiPaymentLink} className="flex items-center justify-center bg-sky-500 text-white px-4 py-2 rounded-lg hover:bg-sky-600 transition-colors"><img src="https://assetscdn1.paytm.com/images/catalog/view/310944/1697527068589.png" className="w-6 h-6 mr-2" /> Paytm</a>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
-                            
-                            {/* COD Payment Option */}
                             <div className={`border rounded-lg p-4 transition-all ${selectedMethod === 'cod' ? 'border-orange-500 ring-2 ring-orange-200' : 'border-gray-300'}`}>
                                 <label className="flex items-center cursor-pointer">
                                     <input type="radio" name="paymentMethod" value="cod" checked={selectedMethod === 'cod'} onChange={() => setSelectedMethod('cod')} className="h-5 w-5 text-orange-600 focus:ring-orange-500" />
                                     <span className="ml-3 font-semibold text-lg text-gray-800">Cash on Delivery</span>
                                 </label>
                                  {selectedMethod === 'cod' && (
-                                    <p className="mt-2 pl-8 text-gray-600">You can pay in cash at the time of delivery.</p>
-                                )}
+                                     <p className="mt-2 pl-8 text-gray-600">You can pay in cash at the time of delivery.</p>
+                                 )}
                             </div>
                         </div>
 
@@ -624,44 +679,52 @@
                         
                         <button onClick={handlePayNow} className="mt-8 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-full w-full focus:outline-none focus:shadow-outline transition-colors duration-200 flex items-center justify-center" disabled={paymentProcessing}>
                             {paymentProcessing && <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-                            {paymentProcessing ? 'Processing...' : `Pay ₹${totalAmount}`}
+                            {paymentProcessing ? 'Processing...' : `Confirm Payment of ₹${Number(totalAmount).toFixed(2)}`}
                         </button>
                     </div>
                 </div>
             );
         };
 
-
         // OrderConfirmation Component
         const OrderConfirmation = ({ orderDetails, onGoHome }) => {
             const statusColors = {'Confirmed': 'text-blue-500', 'Preparing': 'text-yellow-500', 'Out for Delivery': 'text-purple-500', 'Delivered': 'text-green-500'};
             return (
                 <section className="container mx-auto py-12 md:py-16 px-4 text-center min-h-[60vh] flex flex-col justify-center items-center">
-                    <CheckCircle className="text-green-500 mb-6" size={80} />
-                    <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Order Placed Successfully!</h2>
-                    <p className="text-xl text-gray-700 mb-6">Thank you for your order, {orderDetails.deliveryAddress.fullName}!</p>
-                    <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md space-y-4 mb-8 text-left">
-                        <h3 className="text-2xl font-bold text-gray-800 border-b pb-3 mb-3">Order Summary</h3>
-                        <p className="text-lg text-gray-700 flex items-center"><Package size={20} className="mr-2" /> <strong>Order ID:</strong> {orderDetails.orderId}</p>
-                        <p className="text-lg text-gray-700 flex items-center"><RupeeSign size={20} className="mr-2" /> <strong>Total Amount:</strong> ₹{orderDetails.total}</p>
-                        <p className="text-lg text-gray-700 flex items-center"><CreditCard size={20} className="mr-2" /> <strong>Payment Method:</strong> {orderDetails.paymentMethod.toUpperCase()}</p>
-                        {orderDetails.deliveryAddress && (
-                            <div className="mt-4 pt-4 border-t border-gray-200">
-                                <h4 className="text-xl font-bold text-gray-800 mb-2">Delivery Address:</h4>
-                                <p className="text-gray-700">{orderDetails.deliveryAddress.fullName}</p>
-                                <p className="text-gray-700">{orderDetails.deliveryAddress.address}</p>
-                                <p className="text-gray-700">{orderDetails.deliveryAddress.city}, {orderDetails.deliveryAddress.state} - {orderDetails.deliveryAddress.zipCode}</p>
-                            </div>
-                        )}
-                        <div className="flex items-center justify-center pt-4 border-t"><Truck className={`mr-2 ${statusColors[orderDetails.status]}`} size={32} /><p className="text-xl font-bold">Status: <span className={`${statusColors[orderDetails.status]}`}>{orderDetails.status}</span></p></div>
-                        <p className="text-md text-gray-600 mt-2">Your order will be updated in your order history.</p>
+                    <div className="bg-white p-8 rounded-xl shadow-lg">
+                        <CheckCircle className="text-green-500 mb-6 mx-auto" size={80} />
+                        <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Order Placed Successfully!</h2>
+                        <p className="text-xl text-gray-700 mb-6">Thank you for your order, {orderDetails.deliveryAddress.fullName}!</p>
+                        <div className="bg-gray-50 rounded-xl shadow-inner p-8 w-full max-w-md space-y-4 mb-8 text-left mx-auto">
+                            <h3 className="text-2xl font-bold text-gray-800 border-b pb-3 mb-3">Order Summary</h3>
+                            <p className="text-lg text-gray-700 flex items-center"><Package size={20} className="mr-2" /> <strong>Order ID:</strong> {orderDetails.orderId}</p>
+                            
+                            <p className="text-lg text-gray-700"><strong>Subtotal:</strong> ₹{Number(orderDetails.bill.subtotal).toFixed(2)}</p>
+                            {orderDetails.bill.discountAmount > 0 &&
+                                <p className="text-lg text-green-600"><strong>Tiered Discount ({orderDetails.bill.discountPercentage}%):</strong> - ₹{Number(orderDetails.bill.discountAmount).toFixed(2)}</p>
+                            }
+                            {orderDetails.bill.fixedDiscount > 0 &&
+                                <p className="text-lg text-green-600"><strong>Loyalty Discount:</strong> - ₹{Number(orderDetails.bill.fixedDiscount).toFixed(2)}</p>
+                            }
+                            <p className="text-lg text-gray-700 flex items-center"><RupeeSign size={20} className="mr-2" /> <strong>Total Amount:</strong> ₹{Number(orderDetails.bill.finalTotal).toFixed(2)}</p>
+                            <p className="text-lg text-gray-700 flex items-center"><CreditCard size={20} className="mr-2" /> <strong>Payment Method:</strong> {orderDetails.paymentMethod.toUpperCase()}</p>
+                            {orderDetails.deliveryAddress && (
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                    <h4 className="text-xl font-bold text-gray-800 mb-2">Delivery Address:</h4>
+                                    <p className="text-gray-700">{orderDetails.deliveryAddress.fullName}</p>
+                                    <p className="text-gray-700">{orderDetails.deliveryAddress.address}</p>
+                                    <p className="text-gray-700">{orderDetails.deliveryAddress.city}, {orderDetails.deliveryAddress.state} - {orderDetails.deliveryAddress.zipCode}</p>
+                                </div>
+                            )}
+                            <div className="flex items-center justify-center pt-4 border-t"><Truck className={`mr-2 ${statusColors[orderDetails.status]}`} size={32} /><p className="text-xl font-bold">Status: <span className={`${statusColors[orderDetails.status]}`}>{orderDetails.status}</span></p></div>
+                        </div>
+                        <button onClick={onGoHome} className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full text-lg font-semibold shadow-md transition-colors duration-200 flex items-center mx-auto"><Home size={20} className="mr-2" /> Back to Home</button>
                     </div>
-                    <button onClick={onGoHome} className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full text-lg font-semibold shadow-md transition-colors duration-200 flex items-center"><Home size={20} className="mr-2" /> Back to Home</button>
                 </section>
             );
         };
         
-        // **NEW** ProfilePage Component
+        // ProfilePage Component
         const ProfilePage = ({ userDetails }) => {
             if (!userDetails) {
                 return (
@@ -672,45 +735,18 @@
             }
 
             const { username, phoneNumber, userId, createdAt } = userDetails;
-            
-            // **FIXED DATE HANDLING**
             const createdDate = createdAt ? new Date(createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
             const createdTime = createdAt ? new Date(createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
 
             return (
                 <section className="container mx-auto py-12 md:py-16 px-4">
-                    <h2 className="text-3xl md:text-4xl font-bold text-gray-800 text-center mb-10">Your Profile</h2>
-                    <div className="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 space-y-6">
-                        <div className="flex items-center space-x-4">
-                           <UserIcon size={24} className="text-orange-500"/>
-                           <div>
-                             <p className="text-sm text-gray-500">Username</p>
-                             <p className="text-lg font-semibold text-gray-800">{username}</p>
-                           </div>
-                        </div>
-                        <hr/>
-                        <div className="flex items-center space-x-4">
-                           <IdCard size={24} className="text-orange-500"/>
-                           <div>
-                             <p className="text-sm text-gray-500">User ID</p>
-                             <p className="text-lg font-semibold text-gray-800">{userId || 'N/A'}</p>
-                           </div>
-                        </div>
-                         <hr/>
-                        <div className="flex items-center space-x-4">
-                           <Phone size={24} className="text-orange-500"/>
-                           <div>
-                             <p className="text-sm text-gray-500">Phone Number</p>
-                             <p className="text-lg font-semibold text-gray-800">{phoneNumber}</p>
-                           </div>
-                        </div>
-                         <hr/>
-                        <div className="flex items-center space-x-4">
-                           <Calendar size={24} className="text-orange-500"/>
-                           <div>
-                             <p className="text-sm text-gray-500">Member Since</p>
-                             <p className="text-lg font-semibold text-gray-800">{createdDate} {createdTime}</p>
-                           </div>
+                    <div className="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8">
+                        <h2 className="text-3xl md:text-4xl font-bold text-gray-800 text-center mb-10">Your Profile</h2>
+                        <div className="space-y-6">
+                            <div className="flex items-center space-x-4"><UserIcon size={24} className="text-orange-500"/><div><p className="text-sm text-gray-500">Username</p><p className="text-lg font-semibold text-gray-800">{username}</p></div></div><hr/>
+                            <div className="flex items-center space-x-4"><IdCard size={24} className="text-orange-500"/><div><p className="text-sm text-gray-500">User ID</p><p className="text-lg font-semibold text-gray-800">{userId || 'N/A'}</p></div></div><hr/>
+                            <div className="flex items-center space-x-4"><Phone size={24} className="text-orange-500"/><div><p className="text-sm text-gray-500">Phone Number</p><p className="text-lg font-semibold text-gray-800">{phoneNumber}</p></div></div><hr/>
+                            <div className="flex items-center space-x-4"><Calendar size={24} className="text-orange-500"/><div><p className="text-sm text-gray-500">Member Since</p><p className="text-lg font-semibold text-gray-800">{createdDate} {createdTime}</p></div></div>
                         </div>
                     </div>
                 </section>
@@ -791,21 +827,10 @@
                 sortBy: 'relevance',
                 categories: [],
             });
-
-            // Mock Data
-            const mockRestaurants = [
-                { _id: 'rest_001', name: 'Andhra Ruchulu', cuisine: 'South Indian', rating: 4.5, address: 'Hyderabad', image: 'https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: true, menu: [ { _id: 'item_001', name: 'Gongura Mamsam', emoji: '🍖', description: 'Spicy mutton curry.', price: 420.00, category: 'Non-Veg Curries' }, { _id: 'item_002', name: 'Andhra Chicken Biryani', emoji: '🍚🍗', description: 'Spicy chicken biryani.', price: 380.00, category: 'Biryani' }, { _id: 'item_003', name: 'Pappu Charu', emoji: '🥣', description: 'Tangy lentil soup.', price: 150.00, category: 'Veg Curries' }, { _id: 'item_004', name: 'Ragi Mudde', emoji: '🫓', description: 'Finger millet balls.', price: 100.00, category: 'Breads' }, { _id: 'item_005', name: 'Boorelu', emoji: '🍩', description: 'Sweet fried dumplings.', price: 90.00, category: 'Desserts' }, { _id: 'item_006', name: 'Andhra Pulihora', emoji: '🍋🍚', description: 'Tangy tamarind rice.', price: 200.00, category: 'Rice Dishes' }, { _id: 'item_007', name: 'Fish Pulusu', emoji: '🐟🌶️', description: 'Sour fish curry.', price: 450.00, category: 'Seafood' }, { _id: 'item_008', name: 'Mirchi Bajji', emoji: '🌶️🥟', description: 'Chili fritters.', price: 70.00, category: 'Snacks' }, { _id: 'item_009', name: 'Filter Coffee', emoji: '☕', description: 'South Indian filter coffee.', price: 60.00, category: 'Drinks' }, { _id: 'item_101', name: 'Mutton Fry', emoji: '🍖🔥', description: 'Spicy dry mutton fry.', price: 450.00, category: 'Non-Veg Curries' } ]},
-                { _id: 'rest_002', name: 'Rayalaseema Ruchulu', cuisine: 'Rayalaseema', rating: 4.3, address: 'Vijayawada', image: 'https://images.pexels.com/photos/1633578/pexels-photo-1633578.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: true, menu: [ { _id: 'item_010', name: 'Natukodi Pulusu', emoji: '🐔🌶️', description: 'Country chicken curry.', price: 480.00, category: 'Non-Veg Curries' }, { _id: 'item_011', name: 'Jonna Rotte', emoji: '🌾🫓', description: 'Sorghum flatbread.', price: 80.00, category: 'Breads' }, { _id: 'item_012', name: 'Ulavacharu Biryani', emoji: '🍚🍛', description: 'Horse gram biryani.', price: 400.00, category: 'Biryani'}, { _id: 'item_013', name: 'Peanut Chutney', emoji: '🥜🥣', description: 'Spicy peanut chutney.', price: 50.00, category: 'Accompaniments' }, { _id: 'item_014', name: 'Jalebi', emoji: '🥨🍯', description: 'Crispy, syrupy sweet.', price: 100.00, category: 'Desserts' }, { _id: 'item_015', name: 'Masala Chaas', emoji: '🥛🌿', description: 'Spiced buttermilk.', price: 70.00, category: 'Drinks' }, { _id: 'item_102', name: 'Ragi Sangati', emoji: '🌾🍚', description: 'Finger millet porridge.', price: 120.00, category: 'Breads' }, { _id: 'item_103', name: 'Brain Fry', emoji: '🧠🍳', description: 'Spicy lamb brain fry.', price: 350.00, category: 'Non-Veg Curries' }, { _id: 'item_104', name: 'Mutton Keema Balls', emoji: '🍖💣', description: 'Spiced minced mutton balls.', price: 400.00, category: 'Snacks' }, { _id: 'item_105', name: 'Badam Halwa', emoji: '🍮🌰', description: 'Almond sweet.', price: 150.00, category: 'Desserts' } ]},
-                { _id: 'rest_003', name: 'Coastal Kitchen', cuisine: 'Seafood', rating: 4.6, address: 'Visakhapatnam', image: 'https://images.pexels.com/photos/7245465/pexels-photo-7245465.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: true, menu: [ { _id: 'item_016', name: 'Royyala Iguru', emoji: '🦐🌶️', description: 'Spicy prawn fry.', price: 550.00, category: 'Seafood' }, { _id: 'item_017', name: 'Chepala Pulusu', emoji: '🐟🥘', description: 'Tangy fish curry.', price: 480.00, category: 'Seafood' }, { _id: 'item_018', name: 'Kodi Pulao', emoji: '🍚🍗', description: 'Flavorful chicken pulao.', price: 370.00, category: 'Rice Dishes' }, { _id: 'item_019', name: 'Vegetable Kurma', emoji: '🥕🥦', description: 'Mixed vegetable curry.', price: 250.00, category: 'Veg Curries' }, { _id: 'item_020', name: 'Garelu', emoji: '🫘🍩', description: 'Savory lentil fritters.', price: 90.00, category: 'Snacks' }, { _id: 'item_021', name: 'Coconut Water', emoji: '🥥💧', description: 'Fresh tender coconut.', price: 80.00, category: 'Drinks' }, { _id: 'item_106', name: 'Crab Curry', emoji: '🦀🥘', description: 'Spicy crab masala.', price: 600.00, category: 'Seafood' }, { _id: 'item_107', name: 'Prawn Biryani', emoji: '🍚🦐', description: 'Aromatic prawn biryani.', price: 580.00, category: 'Biryani' }, { _id: 'item_108', name: 'Appam', emoji: '🥞', description: 'Soft rice pancake.', price: 60.00, category: 'Breads' }, { _id: 'item_109', name: 'Coconut Ladoo', emoji: '🥥🍬', description: 'Sweet coconut balls.', price: 110.00, category: 'Desserts' } ]},
-                { _id: 'rest_004', name: 'Hyderabad House', cuisine: 'Hyderabadi', rating: 4.2, address: 'Guntur', image: 'https://images.pexels.com/photos/2474661/pexels-photo-2474661.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: true, menu: [ { _id: 'item_022', name: 'Mutton Kothmir', emoji: '🐑🌿', description: 'Mutton with coriander.', price: 460.00, category: 'Non-Veg Curries' }, { _id: 'item_027', name: 'Chicken 65', emoji: '🍗🌶️', description: 'Spicy fried chicken.', price: 290.00, category: 'Snacks' }, { _id: 'item_023', name: 'Bagara Baingan', emoji: '🍆🥘', description: 'Hyderabadi brinjal curry.', price: 260.00, category: 'Veg Curries' }, { _id: 'item_024', name: 'Double Ka Meetha', emoji: '🍞🍮', description: 'Bread pudding dessert.', price: 130.00, category: 'Desserts' }, { _id: 'item_025', name: 'Shahi Tukda', emoji: '👑🍰', description: 'Fried bread in milk.', price: 140.00, category: 'Desserts' }, { _id: 'item_026', name: 'Lassi', emoji: '🥛🥭', description: 'Sweet yogurt drink.', price: 80.00, category: 'Drinks' }, { _id: 'item_110', name: 'Mutton Biryani', emoji: '🍚🐑', description: 'Classic mutton biryani.', price: 500.00, category: 'Biryani' }, { _id: 'item_111', name: 'Haleem', emoji: '🍲', description: 'Slow-cooked meat stew.', price: 450.00, category: 'Non-Veg Curries' }, { _id: 'item_112', name: 'Mirchi ka Salan', emoji: '🌶️🥣', description: 'Chilli curry.', price: 180.00, category: 'Accompaniments' }, { _id: 'item_113', name: 'Qubani Ka Meetha', emoji: '🍑🍮', description: 'Apricot dessert.', price: 160.00, category: 'Desserts' } ]},
-                { _id: 'rest_005', name: 'Guntur Spicy', cuisine: 'Spicy Andhra', rating: 4.7, address: 'Guntur', image: 'https://images.pexels.com/photos/12737656/pexels-photo-12737656.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: true, menu: [ { _id: 'item_028', name: 'Guntur Chicken Fry', emoji: '🌶️🐔', description: 'Fiery chicken dry fry.', price: 390.00, category: 'Non-Veg Curries' }, { _id: 'item_031', name: 'Spicy Egg Curry', emoji: '🥚🌶️', description: 'Eggs in spicy gravy.', price: 280.00, category: 'Non-Veg Curries' }, { _id: 'item_029', name: 'Red Chilli Dosa', emoji: '🌶️🥞', description: 'Spicy red chili dosa.', price: 140.00, category: 'Breads' }, { _id: 'item_030', name: 'Ghee Karam Dosa', emoji: '🥞🧈', description: 'Dosa with spicy powder.', price: 130.00, category: 'Breads' }, { _id: 'item_032', name: 'Lemon Soda', emoji: '🍋🥤', description: 'Refreshing lemon soda.', price: 60.00, category: 'Drinks' }, { _id: 'item_114', name: 'Mutton Kura', emoji: '🍖🌶️', description: 'Spicy Guntur mutton curry.', price: 480.00, category: 'Non-Veg Curries' }, { _id: 'item_115', name: 'Vankaya Pulusu', emoji: '🍆🥣', description: 'Spicy brinjal stew.', price: 220.00, category: 'Veg Curries' }, { _id: 'item_116', name: 'Onion Pakoda', emoji: '🧅🥨', description: 'Crispy onion fritters.', price: 100.00, category: 'Snacks' }, { _id: 'item_117', name: 'Mango Lassi', emoji: '🥭🥛', description: 'Sweet mango yogurt drink.', price: 90.00, category: 'Drinks' }, { _id: 'item_118', name: 'Pappu Annam', emoji: '🍚🥣', description: 'Lentil rice.', price: 150.00, category: 'Rice Dishes' } ]},
-                { _id: 'rest_010', name: 'Biryani Point', cuisine: 'Biryani', rating: 4.8, address: 'Vijayawada', image: 'https://images.pexels.com/photos/5410403/pexels-photo-5410403.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: true, menu: [ { _id: 'item_045', name: 'Vijayawada Chicken Biryani', emoji: '🍚🍗', description: 'Famous spicy biryani.', price: 400.00, category: 'Biryani' }, { _id: 'item_046', name: 'Mutton Dum Biryani', emoji: '🍚🐑', description: 'Slow-cooked mutton.', price: 450.00, category: 'Biryani' }, { _id: 'item_047', name: 'Egg Biryani', emoji: '🍚🥚', description: 'Biryani with boiled eggs.', price: 320.00, category: 'Biryani' }, { _id: 'item_048', name: 'Paneer Biryani', emoji: '🍚🧀', description: 'Biryani with cottage cheese.', price: 340.00, category: 'Biryani' }, { _id: 'item_049', name: 'Mirchi Ka Salan', emoji: '🌶️🥣', description: 'Spicy chili gravy.', price: 80.00, category: 'Accompaniments' }, { _id: 'item_119', name: 'Fish Biryani', emoji: '🍚🐟', description: 'Flavorful fish biryani.', price: 480.00, category: 'Biryani' }, { _id: 'item_120', name: 'Special Chicken Biryani', emoji: '🌟🍚🍗', description: 'Chef\'s special biryani.', price: 450.00, category: 'Biryani' }, { _id: 'item_121', name: 'Veg Biryani', emoji: '🍚🥕', description: 'Mixed vegetable biryani.', price: 300.00, category: 'Biryani' }, { _id: 'item_122', name: 'Raita', emoji: '🥣🥒', description: 'Yogurt side dish.', price: 50.00, category: 'Accompaniments' }, { _id: 'item_123', name: 'Gulab Jamun', emoji: '🍮', description: 'Sweet milk solids balls.', price: 90.00, category: 'Desserts' } ]},
-                { _id: 'rest_026', name: 'Veggie Delight', cuisine: 'Vegetarian', rating: 4.1, address: 'Tirupati', image: 'https://images.pexels.com/photos/1058277/pexels-photo-1058277.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: false, menu: [ { _id: 'item_124', name: 'Gutthi Vankaya Curry', emoji: '🍆🥘', description: 'Stuffed brinjal curry.', price: 250.00, category: 'Veg Curries' }, { _id: 'item_125', name: 'Goli Bajji', emoji: '🥟🧅', description: 'Fried lentil balls.', price: 70.00, category: 'Snacks' }, { _id: 'item_126', name: 'Jangiri', emoji: '🌸🍯', description: 'Flower-shaped sweet.', price: 130.00, category: 'Desserts' }, { _id: 'item_127', name: 'Paneer Butter Masala', emoji: '🧀🧈', description: 'Creamy paneer curry.', price: 280.00, category: 'Veg Curries' }, { _id: 'item_128', name: 'Veg Fried Rice', emoji: '🍚🥕', description: 'Stir-fried rice.', price: 200.00, category: 'Rice Dishes' }, { _id: 'item_129', name: 'Masala Dosa', emoji: '🥞🥔', description: 'Dosa with potato filling.', price: 120.00, category: 'Breads' }, { _id: 'item_130', name: 'Tomato Soup', emoji: '🥣🍅', description: 'Classic tomato soup.', price: 100.00, category: 'Soups' }, { _id: 'item_131', name: 'Mushroom 65', emoji: '🍄🌶️', description: 'Spicy fried mushrooms.', price: 240.00, category: 'Snacks' }, { _id: 'item_132', name: 'Vegetable Thali', emoji: '🍛', description: 'A full veg meal.', price: 300.00, category: 'Thali' }, { _id: 'item_133', name: 'Fresh Lime Soda', emoji: '🍋🥤', description: 'Sweet and salt soda.', price: 70.00, category: 'Drinks' } ]},
-                { _id: 'rest_030', name: 'Filter Coffee', cuisine: 'Cafe', rating: 4.5, address: 'Visakhapatnam', image: 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: false, menu: [{_id: 'item_134', name: 'Strong Filter Coffee', emoji: '☕☕', description: 'Robust traditional coffee.', price: 70.00, category: 'Drinks' }, { _id: 'item_135', name: 'Masala Chai', emoji: '☕🌶️', description: 'Spiced Indian tea.', price: 60.00, category: 'Drinks' }, { _id: 'item_136', name: 'Osmania Biscuit', emoji: '🍪', description: 'Hyderabadi shortbread.', price: 30.00, category: 'Snacks' }, { _id: 'item_137', name: 'Veg Puff', emoji: '🥐', description: 'Vegetable-filled pastry.', price: 50.00, category: 'Snacks' }, { _id: 'item_138', name: 'Samosa', emoji: '🥟', description: 'Potato-filled pastry.', price: 40.00, category: 'Snacks' }, { _id: 'item_139', name: 'Ginger Tea', emoji: '☕🌿', description: 'Tea with fresh ginger.', price: 65.00, category: 'Drinks' }, { _id: 'item_140', name: 'Black Coffee', emoji: '☕', description: 'Simple black coffee.', price: 50.00, category: 'Drinks' }, { _id: 'item_141', name: 'Cookies', emoji: '🍪', description: 'Assorted cookies.', price: 80.00, category: 'Desserts' }, { _id: 'item_142', name: 'Milkshake', emoji: '🥤🍫', description: 'Chocolate milkshake.', price: 120.00, category: 'Drinks' }, { _id: 'item_143', name: 'Bread Omelette', emoji: '🍞🍳', description: 'Simple bread omelette.', price: 90.00, category: 'Snacks' } ]}
-            ];
+            const mockRestaurants = [ { _id: 'rest_001', name: 'Andhra Ruchulu', cuisine: 'South Indian', rating: 4.5, address: 'Hyderabad', image: 'https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: true, menu: [ { _id: 'item_001', name: 'Gongura Mamsam', emoji: '🍖', description: 'Spicy mutton curry.', price: 420.00, category: 'Non-Veg Curries' }, { _id: 'item_002', name: 'Andhra Chicken Biryani', emoji: '🍚🍗', description: 'Spicy chicken biryani.', price: 380.00, category: 'Biryani' }, { _id: 'item_003', name: 'Pappu Charu', emoji: '🥣', description: 'Tangy lentil soup.', price: 150.00, category: 'Veg Curries' }, { _id: 'item_004', name: 'Ragi Mudde', emoji: '🫓', description: 'Finger millet balls.', price: 100.00, category: 'Breads' }, { _id: 'item_005', name: 'Boorelu', emoji: '🍩', description: 'Sweet fried dumplings.', price: 90.00, category: 'Desserts' }, { _id: 'item_006', name: 'Andhra Pulihora', emoji: '🍋🍚', description: 'Tangy tamarind rice.', price: 200.00, category: 'Rice Dishes' }, { _id: 'item_007', name: 'Fish Pulusu', emoji: '🐟🌶️', description: 'Sour fish curry.', price: 450.00, category: 'Seafood' }, { _id: 'item_008', name: 'Mirchi Bajji', emoji: '🌶️🥟', description: 'Chili fritters.', price: 70.00, category: 'Snacks' }, { _id: 'item_009', name: 'Filter Coffee', emoji: '☕', description: 'South Indian filter coffee.', price: 60.00, category: 'Drinks' }, { _id: 'item_101', name: 'Mutton Fry', emoji: '🍖🔥', description: 'Spicy dry mutton fry.', price: 450.00, category: 'Non-Veg Curries' } ]}, { _id: 'rest_002', name: 'Rayalaseema Ruchulu', cuisine: 'Rayalaseema', rating: 4.3, address: 'Vijayawada', image: 'https://images.pexels.com/photos/1633578/pexels-photo-1633578.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: true, menu: [ { _id: 'item_010', name: 'Natukodi Pulusu', emoji: '🐔🌶️', description: 'Country chicken curry.', price: 480.00, category: 'Non-Veg Curries' }, { _id: 'item_011', name: 'Jonna Rotte', emoji: '🌾🫓', description: 'Sorghum flatbread.', price: 80.00, category: 'Breads' }, { _id: 'item_012', name: 'Ulavacharu Biryani', emoji: '🍚🍛', description: 'Horse gram biryani.', price: 400.00, category: 'Biryani'}, { _id: 'item_013', name: 'Peanut Chutney', emoji: '🥜🥣', description: 'Spicy peanut chutney.', price: 50.00, category: 'Accompaniments' }, { _id: 'item_014', name: 'Jalebi', emoji: '🥨🍯', description: 'Crispy, syrupy sweet.', price: 100.00, category: 'Desserts' }, { _id: 'item_015', name: 'Masala Chaas', emoji: '🥛🌿', description: 'Spiced buttermilk.', price: 70.00, category: 'Drinks' }, { _id: 'item_102', name: 'Ragi Sangati', emoji: '🌾🍚', description: 'Finger millet porridge.', price: 120.00, category: 'Breads' }, { _id: 'item_103', name: 'Brain Fry', emoji: '🧠🍳', description: 'Spicy lamb brain fry.', price: 350.00, category: 'Non-Veg Curries' }, { _id: 'item_104', name: 'Mutton Keema Balls', emoji: '🍖💣', description: 'Spiced minced mutton balls.', price: 400.00, category: 'Snacks' }, { _id: 'item_105', name: 'Badam Halwa', emoji: '🍮🌰', description: 'Almond sweet.', price: 150.00, category: 'Desserts' } ]}, { _id: 'rest_003', name: 'Coastal Kitchen', cuisine: 'Seafood', rating: 4.6, address: 'Visakhapatnam', image: 'https://images.pexels.com/photos/7245465/pexels-photo-7245465.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: true, menu: [ { _id: 'item_016', name: 'Royyala Iguru', emoji: '🦐🌶️', description: 'Spicy prawn fry.', price: 550.00, category: 'Seafood' }, { _id: 'item_017', name: 'Chepala Pulusu', emoji: '🐟🥘', description: 'Tangy fish curry.', price: 480.00, category: 'Seafood' }, { _id: 'item_018', name: 'Kodi Pulao', emoji: '🍚🍗', description: 'Flavorful chicken pulao.', price: 370.00, category: 'Rice Dishes' }, { _id: 'item_019', name: 'Vegetable Kurma', emoji: '🥕🥦', description: 'Mixed vegetable curry.', price: 250.00, category: 'Veg Curries' }, { _id: 'item_020', name: 'Garelu', emoji: '🫘🍩', description: 'Savory lentil fritters.', price: 90.00, category: 'Snacks' }, { _id: 'item_021', name: 'Coconut Water', emoji: '🥥💧', description: 'Fresh tender coconut.', price: 80.00, category: 'Drinks' }, { _id: 'item_106', name: 'Crab Curry', emoji: '🦀🥘', description: 'Spicy crab masala.', price: 600.00, category: 'Seafood' }, { _id: 'item_107', name: 'Prawn Biryani', emoji: '🍚🦐', description: 'Aromatic prawn biryani.', price: 580.00, category: 'Biryani' }, { _id: 'item_108', name: 'Appam', emoji: '🥞', description: 'Soft rice pancake.', price: 60.00, category: 'Breads' }, { _id: 'item_109', name: 'Coconut Ladoo', emoji: '🥥🍬', description: 'Sweet coconut balls.', price: 110.00, category: 'Desserts' } ]}, { _id: 'rest_004', name: 'Hyderabad House', cuisine: 'Hyderabadi', rating: 4.2, address: 'Guntur', image: 'https://images.pexels.com/photos/2474661/pexels-photo-2474661.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: true, menu: [ { _id: 'item_022', name: 'Mutton Kothmir', emoji: '🐑🌿', description: 'Mutton with coriander.', price: 460.00, category: 'Non-Veg Curries' }, { _id: 'item_027', name: 'Chicken 65', emoji: '🍗🌶️', description: 'Spicy fried chicken.', price: 290.00, category: 'Snacks' }, { _id: 'item_023', name: 'Bagara Baingan', emoji: '🍆🥘', description: 'Hyderabadi brinjal curry.', price: 260.00, category: 'Veg Curries' }, { _id: 'item_024', name: 'Double Ka Meetha', emoji: '🍞🍮', description: 'Bread pudding dessert.', price: 130.00, category: 'Desserts' }, { _id: 'item_025', name: 'Shahi Tukda', emoji: '👑🍰', description: 'Fried bread in milk.', price: 140.00, category: 'Desserts' }, { _id: 'item_026', name: 'Lassi', emoji: '🥛🥭', description: 'Sweet yogurt drink.', price: 80.00, category: 'Drinks' }, { _id: 'item_110', name: 'Mutton Biryani', emoji: '🍚🐑', description: 'Classic mutton biryani.', price: 500.00, category: 'Biryani' }, { _id: 'item_111', name: 'Haleem', emoji: '🍲', description: 'Slow-cooked meat stew.', price: 450.00, category: 'Non-Veg Curries' }, { _id: 'item_112', name: 'Mirchi ka Salan', emoji: '🌶️🥣', description: 'Chilli curry.', price: 180.00, category: 'Accompaniments' }, { _id: 'item_113', name: 'Qubani Ka Meetha', emoji: '🍑🍮', description: 'Apricot dessert.', price: 160.00, category: 'Desserts' } ]}, { _id: 'rest_005', name: 'Guntur Spicy', cuisine: 'Spicy Andhra', rating: 4.7, address: 'Guntur', image: 'https://images.pexels.com/photos/12737656/pexels-photo-12737656.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: true, menu: [ { _id: 'item_028', name: 'Guntur Chicken Fry', emoji: '🌶️🐔', description: 'Fiery chicken dry fry.', price: 390.00, category: 'Non-Veg Curries' }, { _id: 'item_031', name: 'Spicy Egg Curry', emoji: '🥚🌶️', description: 'Eggs in spicy gravy.', price: 280.00, category: 'Non-Veg Curries' }, { _id: 'item_029', name: 'Red Chilli Dosa', emoji: '🌶️🥞', description: 'Spicy red chili dosa.', price: 140.00, category: 'Breads' }, { _id: 'item_030', name: 'Ghee Karam Dosa', emoji: '🥞🧈', description: 'Dosa with spicy powder.', price: 130.00, category: 'Breads' }, { _id: 'item_032', name: 'Lemon Soda', emoji: '🍋🥤', description: 'Refreshing lemon soda.', price: 60.00, category: 'Drinks' }, { _id: 'item_114', name: 'Mutton Kura', emoji: '🍖🌶️', description: 'Spicy Guntur mutton curry.', price: 480.00, category: 'Non-Veg Curries' }, { _id: 'item_115', name: 'Vankaya Pulusu', emoji: '🍆🥣', description: 'Spicy brinjal stew.', price: 220.00, category: 'Veg Curries' }, { _id: 'item_116', name: 'Onion Pakoda', emoji: '🧅🥨', description: 'Crispy onion fritters.', price: 100.00, category: 'Snacks' }, { _id: 'item_117', name: 'Mango Lassi', emoji: '🥭🥛', description: 'Sweet mango yogurt drink.', price: 90.00, category: 'Drinks' }, { _id: 'item_118', name: 'Pappu Annam', emoji: '🍚🥣', description: 'Lentil rice.', price: 150.00, category: 'Rice Dishes' } ]}, { _id: 'rest_010', name: 'Biryani Point', cuisine: 'Biryani', rating: 4.8, address: 'Vijayawada', image: 'https://images.pexels.com/photos/5410403/pexels-photo-5410403.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: true, menu: [ { _id: 'item_045', name: 'Vijayawada Chicken Biryani', emoji: '🍚🍗', description: 'Famous spicy biryani.', price: 400.00, category: 'Biryani' }, { _id: 'item_046', name: 'Mutton Dum Biryani', emoji: '🍚🐑', description: 'Slow-cooked mutton.', price: 450.00, category: 'Biryani' }, { _id: 'item_047', name: 'Egg Biryani', emoji: '🍚🥚', description: 'Biryani with boiled eggs.', price: 320.00, category: 'Biryani' }, { _id: 'item_048', name: 'Paneer Biryani', emoji: '🍚🧀', description: 'Biryani with cottage cheese.', price: 340.00, category: 'Biryani' }, { _id: 'item_049', name: 'Mirchi Ka Salan', emoji: '🌶️🥣', description: 'Spicy chili gravy.', price: 80.00, category: 'Accompaniments' }, { _id: 'item_119', name: 'Fish Biryani', emoji: '🍚🐟', description: 'Flavorful fish biryani.', price: 480.00, category: 'Biryani' }, { _id: 'item_120', name: 'Special Chicken Biryani', emoji: '🌟🍚🍗', description: 'Chef\'s special biryani.', price: 450.00, category: 'Biryani' }, { _id: 'item_121', name: 'Veg Biryani', emoji: '🍚🥕', description: 'Mixed vegetable biryani.', price: 300.00, category: 'Biryani' }, { _id: 'item_122', name: 'Raita', emoji: '🥣🥒', description: 'Yogurt side dish.', price: 50.00, category: 'Accompaniments' }, { _id: 'item_123', name: 'Gulab Jamun', emoji: '🍮', description: 'Sweet milk solids balls.', price: 90.00, category: 'Desserts' } ]}, { _id: 'rest_026', name: 'Veggie Delight', cuisine: 'Vegetarian', rating: 4.1, address: 'Tirupati', image: 'https://images.pexels.com/photos/1058277/pexels-photo-1058277.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: true, isNonVeg: false, menu: [ { _id: 'item_124', name: 'Gutthi Vankaya Curry', emoji: '🍆🥘', description: 'Stuffed brinjal curry.', price: 250.00, category: 'Veg Curries' }, { _id: 'item_125', name: 'Goli Bajji', emoji: '🥟🧅', description: 'Fried lentil balls.', price: 70.00, category: 'Snacks' }, { _id: 'item_126', name: 'Jangiri', emoji: '🌸🍯', description: 'Flower-shaped sweet.', price: 130.00, category: 'Desserts' }, { _id: 'item_127', name: 'Paneer Butter Masala', emoji: '🧀🧈', description: 'Creamy paneer curry.', price: 280.00, category: 'Veg Curries' }, { _id: 'item_128', name: 'Veg Fried Rice', emoji: '🍚🥕', description: 'Stir-fried rice.', price: 200.00, category: 'Rice Dishes' }, { _id: 'item_129', name: 'Masala Dosa', emoji: '🥞🥔', description: 'Dosa with potato filling.', price: 120.00, category: 'Breads' }, { _id: 'item_130', name: 'Tomato Soup', emoji: '🥣🍅', description: 'Classic tomato soup.', price: 100.00, category: 'Soups' }, { _id: 'item_131', name: 'Mushroom 65', emoji: '🍄🌶️', description: 'Spicy fried mushrooms.', price: 240.00, category: 'Snacks' }, { _id: 'item_132', name: 'Vegetable Thali', emoji: '🍛', description: 'A full veg meal.', price: 300.00, category: 'Thali' }, { _id: 'item_133', name: 'Fresh Lime Soda', emoji: '🍋🥤', description: 'Sweet and salt soda.', price: 70.00, category: 'Drinks' } ]}, { _id: 'rest_030', name: 'Filter Coffee', cuisine: 'Cafe', rating: 4.5, address: 'Visakhapatnam', image: 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', hasOffers: false, isNonVeg: false, menu: [{_id: 'item_134', name: 'Strong Filter Coffee', emoji: '☕☕', description: 'Robust traditional coffee.', price: 70.00, category: 'Drinks' }, { _id: 'item_135', name: 'Masala Chai', emoji: '☕🌶️', description: 'Spiced Indian tea.', price: 60.00, category: 'Drinks' }, { _id: 'item_136', name: 'Osmania Biscuit', emoji: '🍪', description: 'Hyderabadi shortbread.', price: 30.00, category: 'Snacks' }, { _id: 'item_137', name: 'Veg Puff', emoji: '🥐', description: 'Vegetable-filled pastry.', price: 50.00, category: 'Snacks' }, { _id: 'item_138', name: 'Samosa', emoji: '🥟', description: 'Potato-filled pastry.', price: 40.00, category: 'Snacks' }, { _id: 'item_139', name: 'Ginger Tea', emoji: '☕🌿', description: 'Tea with fresh ginger.', price: 65.00, category: 'Drinks' }, { _id: 'item_140', name: 'Black Coffee', emoji: '☕', description: 'Simple black coffee.', price: 50.00, category: 'Drinks' }, { _id: 'item_141', name: 'Cookies', emoji: '🍪', description: 'Assorted cookies.', price: 80.00, category: 'Desserts' }, { _id: 'item_142', name: 'Milkshake', emoji: '🥤🍫', description: 'Chocolate milkshake.', price: 120.00, category: 'Drinks' }, { _id: 'item_143', name: 'Bread Omelette', emoji: '🍞🍳', description: 'Simple bread omelette.', price: 90.00, category: 'Snacks' } ]} ];
             
             const availableCategories = [...new Set(mockRestaurants.flatMap(r => r.menu.map(item => item.category)))];
-
+            
             const filteredRestaurants = mockRestaurants.filter(restaurant => {
                 const { diet, categories } = activeFilters;
                 if (diet === 'veg' && restaurant.isNonVeg) return false;
@@ -823,7 +848,7 @@
                 const { sortBy } = activeFilters;
                 if (sortBy === 'price_asc') return a.avgPrice - b.avgPrice;
                 if (sortBy === 'price_desc') return b.avgPrice - a.avgPrice;
-                return 0; // relevance
+                return 0;
             });
 
 
@@ -859,7 +884,9 @@
             useEffect(() => {
                 if (currentUser) {
                     const storedHistory = localStorage.getItem(`orderHistory_${currentUser}`);
-                    setUserOrderHistory(storedHistory ? JSON.parse(storedHistory) : []);
+                    if (storedHistory) {
+                        setUserOrderHistory(JSON.parse(storedHistory));
+                    }
                 } else {
                     setUserOrderHistory([]);
                 }
@@ -942,11 +969,13 @@
             };
 
             const handlePaymentSuccess = (paymentInfo) => {
+                const billDetails = calculateBill();
                 const newOrder = {
                     ...paymentInfo,
                     items: cart,
                     deliveryAddress: currentDeliveryAddress,
-                    status: 'Confirmed'
+                    status: 'Confirmed',
+                    bill: billDetails // Save the full bill details
                 };
                 setOrderPlacedDetails(newOrder);
                 setUserOrderHistory(prevHistory => [...prevHistory, newOrder]);
@@ -954,13 +983,54 @@
                 setIsPaymentModalOpen(false);
                 setCurrentPage('orderConfirmation');
             };
+            
+            // Tiered discount calculation function
+            const calculateBill = (cartItems = cart) => {
+                const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+                let discountPercentage = 0;
+                
+                if (subtotal >= 5000) {
+                    discountPercentage = 25;
+                } else if (subtotal >= 3000) {
+                    discountPercentage = 20;
+                } else if (subtotal >= 2000) {
+                    discountPercentage = 15;
+                } else if (subtotal >= 1000) {
+                    discountPercentage = 10;
+                } else if (subtotal >= 500) {
+                    discountPercentage = 5;
+                }
+                
+                const discountAmount = subtotal * (discountPercentage / 100);
+
+                // Check for loyalty discount (4th, 8th, 12th, etc. order)
+                const isLoyaltyOrder = (userOrderHistory.length + 1) % 4 === 0;
+                const fixedDiscount = isLoyaltyOrder ? 100 : 0;
+                
+                const finalTotal = subtotal - discountAmount - fixedDiscount;
+
+                return {
+                    subtotal: subtotal,
+                    discountPercentage: discountPercentage,
+                    discountAmount: discountAmount,
+                    fixedDiscount: fixedDiscount,
+                    finalTotal: finalTotal
+                };
+            };
+
 
             const renderContent = () => {
                 if (currentPage === 'orderConfirmation' && orderPlacedDetails) {
                     return <OrderConfirmation orderDetails={orderPlacedDetails} onGoHome={() => {setCurrentPage('home'); setOrderPlacedDetails(null);}} />;
                 }
                 if (currentPage === 'restaurantMenu' && selectedRestaurant) {
-                    return <RestaurantMenuPage restaurant={selectedRestaurant} cart={cart} onUpdateCartQuantity={handleUpdateCartQuantity} onBackToRestaurants={() => {setSelectedRestaurant(null); setCurrentPage('menu');}} />;
+                    return <RestaurantMenuPage 
+                        restaurant={selectedRestaurant} 
+                        cart={cart} 
+                        onUpdateCartQuantity={handleUpdateCartQuantity} 
+                        onBackToRestaurants={() => {setSelectedRestaurant(null); setCurrentPage('menu');}}
+                        calculateBill={calculateBill}
+                    />;
                 }
                 switch (currentPage) {
                     case 'home': return <>
@@ -982,7 +1052,7 @@
                         <div className="flex justify-between items-center mb-10">
                              <h2 className="text-3xl md:text-4xl font-bold text-gray-800">All Restaurants</h2>
                              <button onClick={() => setIsFilterModalOpen(true)} className="flex items-center bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">
-                                <FilterIcon size={20} className="mr-2"/> Filter
+                                 <FilterIcon size={20} className="mr-2"/> Filter
                              </button>
                         </div>
                         {filteredRestaurants.length > 0 ? 
@@ -992,18 +1062,20 @@
                     </section>;
                     case 'contact': return <section className="container mx-auto py-12 md:py-16 px-4 text-center"><h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-6">Contact Us</h2><p className="text-lg text-gray-700 max-w-xl mx-auto">Have questions or feedback? We'd love to hear from you!</p><div className="mt-8 space-y-4"><p className="text-xl font-semibold text-gray-800">Email: <a href="mailto:hemanthheman86@gmail.com" className="text-orange-500 hover:underline">hemanthheman86@gmail.com</a></p><p className="text-xl font-semibold text-gray-800">Phone: <a href="tel:+917702807424" className="text-orange-500 hover:underline">+91 7702807424</a></p><p className="text-lg text-gray-600">Our support team is available Monday to Friday, 9 AM - 6 PM.</p></div></section>;
                     case 'orders': return <section className="container mx-auto py-12 md:py-16 px-4">
-                        <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-6 text-center">Your Orders</h2>
-                        {!isLoggedIn ? <div className="text-center"><p className="text-lg text-gray-700">Please log in to view your orders.</p><button onClick={() => setIsAuthModalOpen(true)} className="mt-6 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-full text-lg font-semibold">Login</button></div> :
-                        <div className="text-center">
-                            <p className="text-2xl text-gray-800 font-semibold mb-8">Welcome, {currentUser}! Here are your orders:</p>
-                            {userOrderHistory.length === 0 ? <p className="text-gray-600 text-lg">You have no past orders.</p> :
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
-                                {userOrderHistory.slice().sort((a,b) => b.timestamp - a.timestamp).map(order => {
-                                    const statusColor = {'Confirmed': 'text-blue-600', 'Preparing': 'text-yellow-600', 'Out for Delivery': 'text-purple-600', 'Delivered': 'text-green-600'}[order.status] || 'text-gray-600';
-                                    return <div key={order.orderId} className="bg-white p-6 rounded-lg shadow-md text-left"><h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center"><Package size={20} className="mr-2"/> Order #{order.orderId}</h3><p className="text-gray-700 mb-3">Date: {new Date(order.timestamp).toLocaleString()}</p><p className="font-semibold text-gray-800 mt-4">Items:</p><ul className="list-disc list-inside text-gray-600 ml-4">{order.items.map((item, idx) => <li key={idx}>{item.emoji} {item.name} x {item.quantity}</li>)}</ul><div className="flex items-center justify-between mt-4 pt-4 border-t"><div className="flex items-center"><Truck className={`mr-2 ${statusColor}`} size={24} /><p className={`font-semibold text-lg ${statusColor}`}>Status: {order.status}</p></div></div></div>
-                                })}
+                        <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+                            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-6 text-center">Your Orders</h2>
+                            {!isLoggedIn ? <div className="text-center"><p className="text-lg text-gray-700">Please log in to view your orders.</p><button onClick={() => setIsAuthModalOpen(true)} className="mt-6 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-full text-lg font-semibold">Login</button></div> :
+                            <div className="text-center">
+                                <p className="text-2xl text-gray-800 font-semibold mb-8">Welcome, {currentUser}! Here are your orders:</p>
+                                {userOrderHistory.length === 0 ? <p className="text-gray-600 text-lg">You have no past orders.</p> :
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    {userOrderHistory.slice().sort((a,b) => b.timestamp - a.timestamp).map(order => {
+                                        const statusColor = {'Confirmed': 'text-blue-600', 'Preparing': 'text-yellow-600', 'Out for Delivery': 'text-purple-600', 'Delivered': 'text-green-600'}[order.status] || 'text-gray-600';
+                                        return <div key={order.orderId} className="bg-gray-50 p-6 rounded-lg shadow-md text-left border"><h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center"><Package size={20} className="mr-2"/> Order #{order.orderId}</h3><p className="text-gray-700 mb-3">Date: {new Date(order.timestamp).toLocaleString()}</p><p className="font-semibold text-gray-800 mt-4">Items:</p><ul className="list-disc list-inside text-gray-600 ml-4">{order.items.map((item, idx) => <li key={idx}>{item.emoji} {item.name} x {item.quantity}</li>)}</ul><div className="mt-4 pt-4 border-t"><p>Total: ₹{order.bill.finalTotal}</p>{order.bill.discountAmount > 0 && <p className="text-sm text-green-600">You saved ₹{order.bill.discountAmount}!</p>}{order.bill.fixedDiscount > 0 && <p className="text-sm text-green-600">You also got a loyalty discount of ₹{order.bill.fixedDiscount}!</p>}<div className="flex items-center justify-between mt-2"><div className="flex items-center"><Truck className={`mr-2 ${statusColor}`} size={24} /><p className={`font-semibold text-lg ${statusColor}`}>Status: {order.status}</p></div></div></div></div>
+                                    })}
+                                </div>}
                             </div>}
-                        </div>}
+                        </div>
                     </section>;
                     case 'profile': return <ProfilePage userDetails={currentUserDetails} />;
                     default: return null;
@@ -1042,7 +1114,7 @@
                     )}
                     
                     {isAuthModalOpen && <AuthModal onClose={() => setIsAuthModalOpen(false)} onLoginSuccess={handleLoginSuccess} />}
-                    {appVisible && isCartOpen && <CartView cartItems={cart} onClose={() => setIsCartOpen(false)} onUpdateQuantity={handleUpdateCartQuantity} onRemoveItem={(id) => setCart(c => c.filter(i => i._id !== id))} onProceedToPayment={handleProceedToDeliveryAddress} />}
+                    {appVisible && isCartOpen && <CartView cartItems={cart} onClose={() => setIsCartOpen(false)} onUpdateQuantity={handleUpdateCartQuantity} onRemoveItem={(id) => setCart(c => c.filter(i => i._id !== id))} onProceedToPayment={handleProceedToDeliveryAddress} calculateBill={calculateBill} />}
                     {appVisible && isDeliveryAddressModalOpen && <DeliveryAddressModal onClose={() => setIsDeliveryAddressModalOpen(false)} onSubmitAddress={handleSubmitDeliveryAddress} />}
                     {appVisible && isPaymentModalOpen && <PaymentModal onClose={() => setIsPaymentModalOpen(false)} totalAmount={currentCartTotal} onPaymentSuccess={handlePaymentSuccess} />}
                     {appVisible && isSearchModalOpen && <SearchModal onClose={() => setIsSearchModalOpen(false)} restaurants={mockRestaurants} onSelectRestaurant={(r) => {setSelectedRestaurant(r); setCurrentPage('restaurantMenu');}} />}

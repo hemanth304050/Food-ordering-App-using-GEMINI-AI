@@ -64,3 +64,4 @@ The entire application is contained within a single HTML file. Here's a breakdow
 ## 🤖 Deployment
 
 This project was deployed by Gemini AI.
+## link --> https://dhkfoodies.netlify.app/
